@@ -89,6 +89,38 @@ bool isRxDone(){
 }
 
 /**
+ * Write values to a register in burst mode.
+ * @param reg Register index.
+ * @param buffer pointer to the buffer from which data is written.
+ * @param length number of bytes to be written
+ */
+void
+lora_write_reg_burst(uint8_t reg,uint8_t *buffer,uint8_t length){
+   uint8_t out[51]={0};
+   uint8_t in[51];
+
+   out[0] = 0x80 | reg ;
+   for (uint8_t i = 0; i < length; i++)
+   {
+      out[i+1]=buffer[i];
+   }
+   
+   spi_transaction_t t = {
+      .flags = 0,
+      .length = 8 * (length+1),
+      .tx_buffer = out,
+      .rx_buffer = in  
+   };
+
+   if(spi_device_transmit(__spi, &t) != ESP_OK)
+	{
+		printf("SPI WRITE ERROR!\n");
+		return ;
+	}
+   return;
+}
+
+/**
  * Write a value to a register.
  * @param reg Register index.
  * @param val Value to write.
@@ -139,6 +171,29 @@ lora_read_reg(int reg)
    return in[1];
 }
 
+/**
+ * Read the current value of a register in burst mode.
+ * @param reg Register index.
+ * @param buffer Pointer to the buffer to store read data.
+ */
+void
+lora_read_reg_burst(uint8_t reg,uint8_t *buffer,uint8_t length)
+{
+   uint8_t out[256] = { 0xff };
+
+   out[0]=reg;
+
+   spi_transaction_t t = {
+      .flags = 0,
+      .length = 8 * (length+1),
+      .tx_buffer = out,
+      .rx_buffer = buffer
+   };
+
+   //gpio_set_level(CONFIG_CS_GPIO, 0);
+   spi_device_transmit(__spi, &t);
+   //gpio_set_level(CONFIG_CS_GPIO, 1);
+}
 /**
  * Perform physical reset on the Lora chip
  */
@@ -447,9 +502,11 @@ lora_send_packet(uint8_t *buf, int size)
    lora_idle();
    lora_write_reg(REG_FIFO_ADDR_PTR, 0);
 
-   for(int i=0; i<size; i++) {
-      lora_write_reg(REG_FIFO, *buf++);
-   }
+   // for(int i=0; i<size; i++) {
+   //    lora_write_reg(REG_FIFO, *buf++);
+   // }
+   
+   lora_write_reg_burst(REG_FIFO, buf,size);
    lora_write_reg(REG_PAYLOAD_LENGTH, size);
    
    /*
@@ -493,9 +550,9 @@ lora_receive_packet(uint8_t *buf, int size)
    lora_idle();   
    lora_write_reg(REG_FIFO_ADDR_PTR, lora_read_reg(REG_FIFO_RX_CURRENT_ADDR));
    if(len > size) len = size;
-   for(int i=0; i<len; i++) 
-      *buf++ = lora_read_reg(REG_FIFO);
-
+   // for(int i=0; i<len; i++) 
+   //    *buf++ = lora_read_reg(REG_FIFO);
+   lora_read_reg_burst(REG_FIFO,buf,len);
    return len;
 }
 
