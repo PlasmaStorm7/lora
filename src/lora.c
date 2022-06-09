@@ -70,8 +70,6 @@
 #define GPIO_INPUT_PINMASK             (1ULL<<CONFIG_DIO0_GPIO)
 #define ESP_INTR_FLAG_DEFAULT 0
 
-#define THISCHANGED 1
-
 static spi_device_handle_t __spi;
 
 static int __implicit;
