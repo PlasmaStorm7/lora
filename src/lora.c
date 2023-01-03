@@ -22,8 +22,10 @@
 #define REG_FIFO_TX_BASE_ADDR          0x0e
 #define REG_FIFO_RX_BASE_ADDR          0x0f
 #define REG_FIFO_RX_CURRENT_ADDR       0x10
+#define REG_IRQ_FLAGS_MASK             0x11
 #define REG_IRQ_FLAGS                  0x12
 #define REG_RX_NB_BYTES                0x13
+#define REG_MODEM_STATUS               0x18
 #define REG_PKT_SNR_VALUE              0x19
 #define REG_PKT_RSSI_VALUE             0x1a
 #define REG_MODEM_CONFIG_1             0x1d
@@ -36,7 +38,8 @@
 #define REG_DETECTION_OPTIMIZE         0x31
 #define REG_DETECTION_THRESHOLD        0x37
 #define REG_SYNC_WORD                  0x39
-#define REG_DIO_MAPPING_1              0x40
+#define REG_DIO_MAPPING_1              0x40 //DIO0-DIO3
+#define REG_DIO_MAPPING_2              0x41 //DIO4,DIO5
 #define REG_VERSION                    0x42
 
 /*
@@ -57,21 +60,36 @@
 /*
  * IRQ masks
  */
+#define IRQ_CAD_DETECTED               0x00
+#define IRQ_FHSS_CHANGE_CHANNEL        0x02
+#define IRQ_CAD_DONE                   0x04
 #define IRQ_TX_DONE_MASK               0x08
+#define IRQ_VALID_HEADER               0x10
 #define IRQ_PAYLOAD_CRC_ERROR_MASK     0x20
 #define IRQ_RX_DONE_MASK               0x40
-
+#define IRQ_RX_TIMEOUT                 0x80
+/*
+ * PA Modes
+ */
 #define PA_OUTPUT_RFO_PIN              0
 #define PA_OUTPUT_PA_BOOST_PIN         1
 
 #define TIMEOUT_RESET                  100
 
+//GPIO prep
 #define GPIO_OUTPUT_PINMASK            ((1ULL<<CONFIG_RST_GPIO)|(1ULL<<CONFIG_CS_GPIO))
 #define GPIO_INPUT_PINMASK             (1ULL<<CONFIG_DIO0_GPIO)
 #define ESP_INTR_FLAG_DEFAULT 0
 
-static spi_device_handle_t __spi;
+//DIO mapping enums
+enum DIO0mode {RxDone=0,Txdone=1,CadDone=2};
+enum DIO1mode {RxTimeout=0,FhssChangeChannel=1,CadDetected=2};
+enum DIO2mode {FhssChangeChannel=0};
+enum DIO3mode {CadDone=0,ValidHeader=1;CrcError=2};
+enum DIO4mode {CadDetected=0,PllLock=1};
+enum DIO5mode {ModeReady=0,ClkOut=1};
 
+static spi_device_handle_t __spi;
 static int __implicit;
 static long __frequency;
 static bool RxDoneFlag;
@@ -85,6 +103,7 @@ void resetRxDone(){
 }
 
 bool isRxDone(){
+
    return RxDoneFlag;
 }
 
@@ -261,7 +280,7 @@ lora_receive(void)
 }
 
 /**
- * Configure power level for transmission
+ * Configure power level for transmission (considering PA boost)
  * @param level 2-17, from least to most power
  */
 void 
@@ -572,7 +591,7 @@ lora_received(void)
 int 
 lora_packet_rssi(void)
 {
-   return (lora_read_reg(REG_PKT_RSSI_VALUE) - (__frequency < 868E6 ? 164 : 157));
+   return (lora_read_reg(REG_PKT_RSSI_VALUE) - (__frequency < 860E6 ? 164 : 157));
 }
 
 /**
